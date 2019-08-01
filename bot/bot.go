@@ -2,18 +2,23 @@ package bot
 
 import (
 	"context"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	//"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type Bot struct {
-	tg     *tgbotapi.BotAPI
-	logger zerolog.Logger
+	tg      *tgbotapi.BotAPI
+	logger  zerolog.Logger
+	handler Handler
 }
 
 func NewBot(logger zerolog.Logger, apiToken string) (Bot, error) {
-	b := Bot{logger: logger.With().Str("module", "bot").Logger()}
+	b := Bot{
+		logger: logger.With().Str("module", "bot").Logger(),
+	}
 
 	if apiToken == "" {
 		return b, errors.New("telegram api token must be provided")
@@ -34,7 +39,15 @@ func NewBot(logger zerolog.Logger, apiToken string) (Bot, error) {
 	return b, nil
 }
 
+func (b *Bot) Handle(h Handler) {
+	b.handler = h
+}
+
 func (b Bot) RunUpdateChannel(ctx context.Context) error {
+	if b.handler == nil {
+		return errors.New("handler must be set before running updater")
+	}
+
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
 
@@ -56,21 +69,16 @@ func (b Bot) RunUpdateChannel(ctx context.Context) error {
 				b.logger.Info().
 					Str("cause", "updates channel is closed").
 					Msg("exit loop for getting updates")
+				return nil
 			}
 
-			if update.Message == nil {
-				continue
-			}
+			//handlerCtx := b.logger.With().Str("requestId", uuid.New().String()).Logger().WithContext(ctx)
 
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-
-			msg.ReplyToMessageID = update.Message.MessageID
-
-			if _, err := b.tg.Send(msg); err != nil {
-				b.logger.Error().
-					Err(err).
-					Msg("failed to send message")
-			}
+			b.handler.Handle(ctx, update)
 		}
 	}
+}
+
+func (b Bot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
+	return b.tg.Send(c)
 }
