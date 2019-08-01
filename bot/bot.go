@@ -4,7 +4,7 @@ import (
 	"context"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	//"github.com/google/uuid"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -72,9 +72,11 @@ func (b Bot) RunUpdateChannel(ctx context.Context) error {
 				return nil
 			}
 
-			//handlerCtx := b.logger.With().Str("requestId", uuid.New().String()).Logger().WithContext(ctx)
+			handlerLogger := b.logger.With().Str("requestId", uuid.New().String()).Logger()
 
-			b.handler.Handle(ctx, update)
+			handlerCtx := handlerLogger.WithContext(ctx)
+
+			b.handler.Handle(handlerCtx, update)
 		}
 	}
 }
