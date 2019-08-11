@@ -2,7 +2,10 @@ ensure-deps:
 	go mod tidy && go mod vendor
 
 run:
-	go run main.go -api-token=${TELEGRAM_APITOKEN} -log-level=${LOG_LEVEL}
+	go run main.go --config "./conf.yml"
+
+init-db:
+	go run main.go db init --config "./conf.yml"
 
 build:
 	GOOS=darwin go build -o dist/darwin/telegram_bot_ex

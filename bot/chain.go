@@ -15,7 +15,7 @@ func (c Chain) Then(h Handler) Handler {
 	return h
 }
 
-func (c Chain) ThenFunc(hf HandleFunc) Handler {
+func (c Chain) ThenFunc(hf HandlerFunc) Handler {
 	return c.Then(hf)
 }
 

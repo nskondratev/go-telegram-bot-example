@@ -30,9 +30,9 @@ func NewBot(logger zerolog.Logger, apiToken string) (Bot, error) {
 		return b, errors.Wrap(err, "failed to create telegram bot instance")
 	}
 
-	if zerolog.GlobalLevel() == zerolog.DebugLevel {
-		tg.Debug = true
-	}
+	//if zerolog.GlobalLevel() == zerolog.DebugLevel {
+	//	tg.Debug = true
+	//}
 
 	b.tg = tg
 
