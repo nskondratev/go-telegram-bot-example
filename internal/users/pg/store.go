@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx"
@@ -16,16 +15,16 @@ SELECT
 	username,
 	first_name,
 	last_name,
-	lang,
+	language,
 	source_lang,
 	target_lang,
 	points
 FROM "users"
-WHERE telegram_user_id = $1"
+WHERE telegram_user_id = $1
 `
 	insertUserQuery = `
 INSERT INTO "users"
-	(telegram_user_id, username, first_name, last_name, lang, source_lang, target_lang, points)
+	(telegram_user_id, username, first_name, last_name, language, source_lang, target_lang, points)
 VALUES
 	($1, $2, $3, $4, $5, $6, $7, $8)
 `
@@ -45,14 +44,20 @@ func (s *Store) GetUserByTelegramUserID(ctx context.Context, tgUserID int64) (us
 	err := row.Scan(&user.TelegramUserID, &user.UserName, &user.FirstName, &user.LastName, &user.Lang, &user.SourceLang,
 		&user.TargetLang, &user.Points)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return user, users.ErrUserNotFound
 		}
-		return user, fmt.Errorf("failed to scan user by telegram user: %w", err)
+		return user, fmt.Errorf("failed to scan user by telegram user id: %w", err)
 	}
 	return user, nil
 }
 
 func (s *Store) StoreUser(ctx context.Context, user *users.User) error {
-	panic("implement me")
+	_, err := s.db.ExecEx(ctx, insertUserQuery, &pgx.QueryExOptions{},
+		user.TelegramUserID, user.UserName, user.FirstName, user.LastName, user.Lang, user.SourceLang, user.TargetLang,
+		user.Points)
+	if err != nil {
+		return fmt.Errorf("failed to insert user: %w", err)
+	}
+	return nil
 }

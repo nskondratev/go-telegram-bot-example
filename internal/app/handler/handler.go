@@ -20,7 +20,7 @@ func NewHandler(bot bot.Bot) Handler {
 }
 
 func (h Handler) Handle(ctx context.Context, update tgbotapi.Update) {
-	user := ctx.Value("user").(users.User)
+	user := users.Ctx(ctx)
 	logger := zerolog.Ctx(ctx)
 
 	logger.Info().

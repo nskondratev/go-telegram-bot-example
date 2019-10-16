@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -44,9 +45,12 @@ func SetUser(usersStore users.Store) func(next bot.Handler) bot.Handler {
 			logger := zerolog.Ctx(ctx)
 			if update.Message != nil && update.Message.From != nil {
 				user, err := usersStore.GetUserByTelegramUserID(ctx, int64(update.Message.From.ID))
-
 				if err != nil {
-					if err == users.ErrUserNotFound {
+					logger.Error().
+						Err(err).
+						Int64("tg_user_id", int64(update.Message.From.ID)).
+						Msg("User not found")
+					if errors.Is(err, users.ErrUserNotFound) {
 						user = users.User{
 							TelegramUserID: int64(update.Message.From.ID),
 							UserName:       update.Message.From.UserName,
@@ -58,13 +62,17 @@ func SetUser(usersStore users.Store) func(next bot.Handler) bot.Handler {
 							Points:         60,
 						}
 						if err := usersStore.StoreUser(ctx, &user); err != nil {
-							logger.Error().Err(err).Msg("failed to store user in MongoDB")
+							logger.Error().
+								Err(err).
+								Msg("failed to store user in store")
 						}
 					} else {
-						logger.Error().Err(err).Msg("failed to fetch user by tg userID from mongo")
+						logger.Error().
+							Err(err).
+							Msg("failed to fetch user by tg userID from store")
 					}
 				}
-				ctx = context.WithValue(ctx, "user", user)
+				ctx = user.WithContext(ctx)
 			} else {
 				logger.Info().Msg("can not get sender user from this update")
 			}
