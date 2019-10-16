@@ -18,11 +18,14 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/nskondratev/go-telegram-translator-bot/app/handler"
-	"github.com/nskondratev/go-telegram-translator-bot/app/middleware"
-	"github.com/nskondratev/go-telegram-translator-bot/app/users"
-	"github.com/nskondratev/go-telegram-translator-bot/bot"
-	"github.com/nskondratev/go-telegram-translator-bot/mongo"
+	"github.com/jackc/pgx"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/middleware"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/bot"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/logger"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/pg"
+	usersPgStore "github.com/nskondratev/go-telegram-translator-bot/internal/users/pg"
+	"github.com/rs/zerolog"
 	"log"
 	"os"
 	"os/signal"
@@ -32,8 +35,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	appLogger "github.com/nskondratev/go-telegram-translator-bot/log"
 )
 
 var cfgFile string
@@ -51,28 +52,12 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		logger, err := appLogger.NewLogger(viper.GetString("LOG_LEVEL"), os.Stdout)
+		logger := getLogger()
 
-		if err != nil {
-			log.Fatal(err)
-		}
+		db := getDB()
+		usersStore := usersPgStore.New(db)
 
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		mongoCl, err := mongo.NewClient(ctx, viper.GetString("MONGO_CONN"))
-
-		if err != nil {
-			logger.Fatal().
-				Err(err).
-				Msg("failed to connect to mongo db instance")
-		}
-
-		db := mongoCl.Database(viper.GetString("MONGO_DBNAME"))
-		usersCollection := db.Collection("users")
-
-		usersStore := users.NewMongo(usersCollection)
-
-		b, err := bot.NewBot(logger, viper.GetString("API_KEY"))
-
+		b, err := bot.New(logger, viper.GetString("API_KEY"))
 		if err != nil {
 			logger.Fatal().
 				Err(err).
@@ -130,10 +115,9 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.go-telegram-translator-bot.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "./conf.yml", "config file (default is $HOME/.go-telegram-translator-bot.yaml)")
 	rootCmd.PersistentFlags().String("log-level", "info", "log level in lowercase")
-	rootCmd.PersistentFlags().String("mongo-conn", "", "connection string to MongoDB instance")
-	rootCmd.PersistentFlags().String("mongo-dbname", "", "MongoDB database name")
+	rootCmd.PersistentFlags().String("db-conn", "", "connection string to PostgreSQL database")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -146,16 +130,11 @@ func init() {
 		log.Fatal(err)
 	}
 
-	if err := viper.BindPFlag("MONGO_CONN", rootCmd.PersistentFlags().Lookup("mongo-conn")); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := viper.BindPFlag("MONGO_DBNAME", rootCmd.PersistentFlags().Lookup("mongo-dbname")); err != nil {
+	if err := viper.BindPFlag("DB_CONN", rootCmd.PersistentFlags().Lookup("db-conn")); err != nil {
 		log.Fatal(err)
 	}
 
 	viper.SetDefault("LOG_LEVEL", "info")
-	viper.SetDefault("MONGO_CONN", "mongodb://localhost:27017")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -182,4 +161,21 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func getLogger() zerolog.Logger {
+	l, err := logger.New(viper.GetString("LOG_LEVEL"), os.Stdout)
+	if err != nil {
+		log.Fatalf("failed to init logger: %s", err.Error())
+	}
+
+	return l
+}
+
+func getDB() *pgx.ConnPool {
+	db, err := pg.New(viper.GetString("DB_CONN"), 10)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %s", err.Error())
+	}
+	return db
 }
