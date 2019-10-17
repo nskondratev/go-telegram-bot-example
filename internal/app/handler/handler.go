@@ -27,6 +27,17 @@ func (h Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		Str("userFromCtx", fmt.Sprintf("%#v", user)).
 		Msg("log user in handler")
 
+	if update.Message != nil && update.Message.Voice != nil {
+		v := update.Message.Voice
+		logger.Info().
+			Int("duration", v.Duration).
+			Str("file_id", v.FileID).
+			Str("mimetype", v.MimeType).
+			Int("duration", v.Duration).
+			Msg("Incoming voice message")
+		return
+	}
+
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
 	msg.ReplyToMessageID = update.Message.MessageID
 
