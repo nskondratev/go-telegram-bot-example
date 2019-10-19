@@ -84,3 +84,7 @@ func (b Bot) RunUpdateChannel(ctx context.Context) error {
 func (b Bot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
 	return b.tg.Send(c)
 }
+
+func (b Bot) GetFileDirectURL(fileID string) (string, error) {
+	return b.tg.GetFileDirectURL(fileID)
+}

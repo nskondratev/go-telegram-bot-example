@@ -18,23 +18,32 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/app/middleware"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/bot"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/logger"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/pg"
-	usersPgStore "github.com/nskondratev/go-telegram-translator-bot/internal/users/pg"
-	"github.com/rs/zerolog"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	speech "cloud.google.com/go/speech/apiv1"
+	texttospeech "cloud.google.com/go/texttospeech/apiv1"
+	"cloud.google.com/go/translate"
+	"github.com/jackc/pgx"
 	"github.com/mitchellh/go-homedir"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/command"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/voice"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/middleware"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/bot"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/logger"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/pg"
+	googleS2T "github.com/nskondratev/go-telegram-translator-bot/internal/speech2text/google"
+	googleT2S "github.com/nskondratev/go-telegram-translator-bot/internal/text2speech/google"
+	googleTr "github.com/nskondratev/go-telegram-translator-bot/internal/texttranslate/google"
+	usersPgStore "github.com/nskondratev/go-telegram-translator-bot/internal/users/pg"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
 )
 
 var cfgFile string
@@ -52,11 +61,36 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
+		appCtx, appCancel := context.WithCancel(context.Background())
 		logger := getLogger()
-
 		db := getDB()
 		usersStore := usersPgStore.New(db)
 
+		// Init translation services
+		googleS2TClient, err := speech.NewClient(appCtx)
+		if err != nil {
+			logger.Fatal().
+				Err(err).
+				Msg("Failed to create Google Cloud Speech to text API client")
+		}
+		googleTranslateClient, err := translate.NewClient(appCtx)
+		if err != nil {
+			logger.Fatal().
+				Err(err).
+				Msg("Failed to create Google Cloud Translate API client")
+		}
+		googleT2SClient, err := texttospeech.NewClient(appCtx)
+		if err != nil {
+			logger.Fatal().
+				Err(err).
+				Msg("Failed to create Google Cloud Text to speech API client")
+		}
+		s2t := googleS2T.New(googleS2TClient)
+		tr := googleTr.New(googleTranslateClient)
+		t2s := googleT2S.New(googleT2SClient)
+		vs := voicetranslate.New(s2t, tr, t2s)
+
+		// Init bot
 		b, err := bot.New(logger, viper.GetString("API_KEY"))
 		if err != nil {
 			logger.Fatal().
@@ -64,17 +98,21 @@ to quickly create a Cobra application.`,
 				Msg("failed to create bot")
 		}
 
+		msgHandler := bot.
+			NewChain(
+				command.New(&b).Middleware,
+			).
+			Then(voice.New(&b, vs))
+
 		h := bot.
 			NewChain(
 				middleware.LogTimeExecution,
 				middleware.LogUserInfo,
 				middleware.SetUser(usersStore),
 			).
-			Then(handler.NewHandler(b))
+			Then(msgHandler)
 
 		b.Handle(h)
-
-		appCtx, appCancel := context.WithCancel(context.Background())
 
 		go func() {
 			err := b.RunUpdateChannel(appCtx)
