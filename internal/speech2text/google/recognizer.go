@@ -20,10 +20,11 @@ func New(client *speech.Client) *Recognizer {
 func (r *Recognizer) ToText(ctx context.Context, data []byte, lang string) (string, error) {
 	resp, err := r.client.Recognize(ctx, &speechpb.RecognizeRequest{
 		Config: &speechpb.RecognitionConfig{
-			AudioChannelCount: 1,
-			Encoding:          speechpb.RecognitionConfig_OGG_OPUS,
-			LanguageCode:      "ru-RU",
-			SampleRateHertz:   48000,
+			AudioChannelCount:          1,
+			EnableAutomaticPunctuation: true,
+			Encoding:                   speechpb.RecognitionConfig_OGG_OPUS,
+			LanguageCode:               "ru-RU",
+			SampleRateHertz:            48000,
 		},
 		Audio: &speechpb.RecognitionAudio{
 			AudioSource: &speechpb.RecognitionAudio_Content{Content: data},
