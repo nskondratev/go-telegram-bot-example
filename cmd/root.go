@@ -105,7 +105,7 @@ to quickly create a Cobra application.`,
 
 		msgHandler := bot.
 			NewChain(
-				command.New(&b).Middleware,
+				command.New(&b, usersStore).Middleware,
 			).
 			Then(voice.New(&b, vs))
 

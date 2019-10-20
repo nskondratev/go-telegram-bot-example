@@ -88,3 +88,8 @@ func (b Bot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
 func (b Bot) GetFileDirectURL(fileID string) (string, error) {
 	return b.tg.GetFileDirectURL(fileID)
 }
+
+func (b Bot) SendChatAction(chatID int64, action string) error {
+	_, err := b.tg.Send(tgbotapi.NewChatAction(chatID, action))
+	return err
+}

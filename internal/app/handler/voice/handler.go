@@ -39,6 +39,11 @@ func (h *Handler) Middleware(next bot.Handler) bot.Handler {
 func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 	log := zerolog.Ctx(ctx)
 	if update.Message != nil && update.Message.Voice != nil {
+		if err := h.bot.SendChatAction(update.Message.Chat.ID, tgbotapi.ChatRecordAudio); err != nil {
+			log.Warn().
+				Err(err).
+				Msg("Failed to send chat action")
+		}
 		v := update.Message.Voice
 		fileURL, err := h.bot.GetFileDirectURL(v.FileID)
 		if err != nil {

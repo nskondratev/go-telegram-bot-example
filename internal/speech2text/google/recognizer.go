@@ -1,11 +1,10 @@
 package google
 
 import (
+	speech "cloud.google.com/go/speech/apiv1"
 	"context"
 	"errors"
 	"fmt"
-
-	speech "cloud.google.com/go/speech/apiv1"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 )
 
@@ -23,7 +22,7 @@ func (r *Recognizer) ToText(ctx context.Context, data []byte, lang string) (stri
 			AudioChannelCount:          1,
 			EnableAutomaticPunctuation: true,
 			Encoding:                   speechpb.RecognitionConfig_OGG_OPUS,
-			LanguageCode:               "ru-RU",
+			LanguageCode:               lang,
 			SampleRateHertz:            48000,
 		},
 		Audio: &speechpb.RecognitionAudio{
