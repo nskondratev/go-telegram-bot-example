@@ -67,10 +67,28 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		if !genSpeech.UseExisting() {
 			msg := tgbotapi.NewVoiceUpload(update.Message.Chat.ID, tgbotapi.FileBytes{Bytes: genSpeech.Voice})
 			msg.ReplyToMessageID = update.Message.MessageID
-			if _, err := h.bot.Send(msg); err != nil {
+			sentMsg, err := h.bot.Send(msg)
+			if err != nil {
 				log.Error().
 					Err(err).
 					Msg("error while trying to send reply message")
+			}
+			if sentMsg.Voice != nil {
+				if err := genSpeech.FlushCache(ctx, sentMsg.Voice.FileID); err != nil {
+					log.Warn().
+						Err(err).
+						Msg("Failed to flush speech cache")
+				}
+			} else {
+				log.Warn().
+					Msg("voice in sent message is nil")
+			}
+		} else {
+			msg := tgbotapi.NewVoiceShare(update.Message.Chat.ID, genSpeech.FileID)
+			if _, err := h.bot.Send(msg); err != nil {
+				log.Error().
+					Err(err).
+					Msg("Failed to send message to user")
 			}
 		}
 	}

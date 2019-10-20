@@ -44,6 +44,8 @@ import (
 	googleTr "github.com/nskondratev/go-telegram-translator-bot/internal/texttranslate/google"
 	usersPgStore "github.com/nskondratev/go-telegram-translator-bot/internal/users/pg"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
+	speechCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/speech/pg"
+	textCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/translator/pg"
 )
 
 var cfgFile string
@@ -85,10 +87,13 @@ to quickly create a Cobra application.`,
 				Err(err).
 				Msg("Failed to create Google Cloud Text to speech API client")
 		}
-		s2t := googleS2T.New(googleS2TClient)
-		tr := googleTr.New(googleTranslateClient)
-		t2s := googleT2S.New(googleT2SClient)
-		vs := voicetranslate.New(s2t, tr, t2s)
+		vs := voicetranslate.New(
+			googleS2T.New(googleS2TClient),
+			googleTr.New(googleTranslateClient),
+			googleT2S.New(googleT2SClient),
+			textCachePG.New(db),
+			speechCachePG.New(db),
+		)
 
 		// Init bot
 		b, err := bot.New(logger, viper.GetString("API_KEY"))
