@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS "generated_speech" (
     target_lang VARCHAR(10) NOT NULL,
     input_text TEXT NOT NULL,
     telegram_file_id VARCHAR(32) NOT NULL,
-    requested_count BIGINT NOT NULL,
+    requested_count BIGINT NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_requested_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("hash", target_lang)
