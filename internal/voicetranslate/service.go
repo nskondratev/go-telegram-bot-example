@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
 
 	"github.com/rs/zerolog"
 )
 
 // Service that transforms speech to text
 type SpeechToTexter interface {
-	ToText(ctx context.Context, data []byte, lang string) (string, error)
+	ToText(ctx context.Context, data []byte, lang []string) (text, recognizedLang string, err error)
 }
 
 // Service that translates text from one language to another
@@ -78,22 +79,23 @@ func New(
 func (s *Service) Translate(ctx context.Context, voice []byte, sourceLang, targetLang string) (TranslateResult, error) {
 	log := zerolog.Ctx(ctx)
 	var res TranslateResult
-	recognizedSpeech, err := s.s2t.ToText(ctx, voice, sourceLang)
+	recognizedSpeech, recognizedLang, err := s.s2t.ToText(ctx, voice, []string{sourceLang, targetLang})
+	targetLang = util.GetTargetLang(recognizedLang, sourceLang, targetLang)
 	if err != nil {
 		return res, fmt.Errorf("failed to recognize text from speech: %w", err)
 	}
-	translated, err := s.tc.Get(ctx, recognizedSpeech, sourceLang, targetLang)
+	translated, err := s.tc.Get(ctx, recognizedSpeech, recognizedLang, targetLang)
 	if err != nil {
 		if !errors.Is(err, ErrNotFoundInCache) {
 			log.Warn().
 				Err(err).
 				Msg("failed to lookup text translation in cache")
 		}
-		translated, err = s.textTr.Translate(ctx, recognizedSpeech, sourceLang, targetLang)
+		translated, err = s.textTr.Translate(ctx, recognizedSpeech, recognizedLang, targetLang)
 		if err != nil {
 			return res, fmt.Errorf("failed to translate text: %w", err)
 		}
-		err := s.tc.Store(ctx, recognizedSpeech, translated, sourceLang, targetLang)
+		err := s.tc.Store(ctx, recognizedSpeech, translated, recognizedLang, targetLang)
 		if err != nil {
 			log.Warn().
 				Err(err).

@@ -3,7 +3,7 @@ cloud.google.com/go/compute/metadata
 cloud.google.com/go/internal/version
 cloud.google.com/go/longrunning
 cloud.google.com/go/longrunning/autogen
-cloud.google.com/go/speech/apiv1
+cloud.google.com/go/speech/apiv1p1beta1
 cloud.google.com/go/texttospeech/apiv1
 cloud.google.com/go/translate
 cloud.google.com/go/translate/internal/translate/v2
@@ -169,7 +169,7 @@ google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
 # google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb
 google.golang.org/genproto/googleapis/api/annotations
-google.golang.org/genproto/googleapis/cloud/speech/v1
+google.golang.org/genproto/googleapis/cloud/speech/v1p1beta1
 google.golang.org/genproto/googleapis/cloud/texttospeech/v1
 google.golang.org/genproto/googleapis/longrunning
 google.golang.org/genproto/googleapis/rpc/status

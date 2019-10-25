@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	speech "cloud.google.com/go/speech/apiv1"
+	speech "cloud.google.com/go/speech/apiv1p1beta1"
 	texttospeech "cloud.google.com/go/texttospeech/apiv1"
 	"cloud.google.com/go/translate"
 	"github.com/jackc/pgx"
