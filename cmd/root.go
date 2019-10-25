@@ -16,23 +16,14 @@ limitations under the License.
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
 	speech "cloud.google.com/go/speech/apiv1p1beta1"
 	texttospeech "cloud.google.com/go/texttospeech/apiv1"
 	"cloud.google.com/go/translate"
+	"context"
+	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/go-homedir"
-	"github.com/rs/zerolog"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/command"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/voice"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/middleware"
@@ -46,6 +37,14 @@ import (
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
 	speechCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/speech/pg"
 	textCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/translator/pg"
+	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 var cfgFile string
@@ -65,6 +64,8 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		appCtx, appCancel := context.WithCancel(context.Background())
 		logger := getLogger()
+		appCtx = logger.WithContext(appCtx)
+
 		db := getDB(appCtx)
 		usersStore := usersPgStore.New(db)
 
@@ -119,26 +120,37 @@ to quickly create a Cobra application.`,
 
 		b.Handle(h)
 
-		go func() {
-			err := b.RunUpdateChannel(appCtx)
+		g, appCtx := errgroup.WithContext(appCtx)
 
-			if err != nil {
+		g.Go(func() error {
+			// Wait for interruption
+			ic := make(chan os.Signal, 1)
+			signal.Notify(ic, os.Interrupt, syscall.SIGTERM)
+			<-ic
+			logger.Info().Msg("application is interrupted. Stopping appCtx...")
+			appCancel()
+			return appCtx.Err()
+		})
+
+		g.Go(func() error {
+			return b.RunUpdateChannel(appCtx)
+		})
+
+		logger.Info().
+			Msg("Start telegram bot application")
+
+		err = g.Wait()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				logger.Info().
+					Err(err).
+					Msg("App context is canceled")
+			} else {
 				logger.Fatal().
 					Err(err).
-					Msg("error in bot update channel listener")
+					Msg("Error in errgroup")
 			}
-		}()
-
-		logger.Info().Msg("Start telegram bot application")
-
-		// Wait for interruption
-		ic := make(chan os.Signal, 1)
-		signal.Notify(ic, os.Interrupt, syscall.SIGTERM)
-
-		<-ic
-		logger.Info().Msg("application is interrupted. Stopping appCtx...")
-		appCancel()
-		time.Sleep(500 * time.Millisecond)
+		}
 	},
 }
 

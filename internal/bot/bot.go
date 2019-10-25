@@ -58,7 +58,7 @@ func (b Bot) RunUpdateChannel(ctx context.Context) error {
 			b.logger.Info().
 				Str("cause", "context is closed").
 				Msg("exit loop for getting updates")
-			return nil
+			return ctx.Err()
 		case update, ok := <-updates:
 			if !ok {
 				b.logger.Info().
