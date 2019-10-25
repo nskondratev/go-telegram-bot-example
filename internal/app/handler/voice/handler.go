@@ -14,15 +14,21 @@ import (
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
 )
 
-type Handler struct {
-	bot   *bot.Bot
-	voice *voicetranslate.Service
+type usersCostCharger interface {
+	ChargeCost(ctx context.Context, tgUserID, cost int64) error
 }
 
-func New(bot *bot.Bot, voice *voicetranslate.Service) *Handler {
+type Handler struct {
+	bot         *bot.Bot
+	voice       *voicetranslate.Service
+	costCharger usersCostCharger
+}
+
+func New(bot *bot.Bot, voice *voicetranslate.Service, costCharger usersCostCharger) *Handler {
 	return &Handler{
-		bot:   bot,
-		voice: voice,
+		bot:         bot,
+		voice:       voice,
+		costCharger: costCharger,
 	}
 }
 
@@ -61,12 +67,21 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		}
 
 		user := users.Ctx(ctx)
-		genSpeech, err := h.voice.Translate(ctx, data, user.SourceLang, user.TargetLang)
+		genSpeech, err := h.voice.Translate(ctx, data, v.Duration, user.SourceLang, user.TargetLang)
 		if err != nil {
 			log.Error().
 				Err(err).
 				Msg("Failed to translate voice message")
 			return
+		}
+
+		err = h.costCharger.ChargeCost(ctx, user.TelegramUserID, genSpeech.Cost)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Int64("cost", genSpeech.Cost).
+				Int64("telegram_user_id", user.TelegramUserID).
+				Msg("Failed to charge action cost for user")
 		}
 
 		if !genSpeech.UseExisting() {

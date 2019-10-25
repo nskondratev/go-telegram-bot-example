@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
+	"math"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 )
@@ -37,6 +39,7 @@ type TranslateResult struct {
 	Voice      []byte
 	FileID     string
 	FlushCache SpeechCacheStorer
+	Cost       int64
 }
 
 func (tr TranslateResult) UseExisting() bool {
@@ -76,14 +79,18 @@ func New(
 }
 
 // Perform voice translation
-func (s *Service) Translate(ctx context.Context, voice []byte, sourceLang, targetLang string) (TranslateResult, error) {
+func (s *Service) Translate(ctx context.Context, voice []byte, duration int, sourceLang, targetLang string) (TranslateResult, error) {
 	log := zerolog.Ctx(ctx)
 	var res TranslateResult
 	recognizedSpeech, recognizedLang, err := s.s2t.ToText(ctx, voice, []string{sourceLang, targetLang})
-	targetLang = util.GetTargetLang(recognizedLang, sourceLang, targetLang)
 	if err != nil {
 		return res, fmt.Errorf("failed to recognize text from speech: %w", err)
 	}
+	res.Cost += int64(math.Ceil(float64(duration) / 15.0))
+	if res.Cost < 1 {
+		res.Cost = 1
+	}
+	targetLang = util.GetTargetLang(recognizedLang, sourceLang, targetLang)
 	translated, err := s.tc.Get(ctx, recognizedSpeech, recognizedLang, targetLang)
 	if err != nil {
 		if !errors.Is(err, ErrNotFoundInCache) {
@@ -95,6 +102,11 @@ func (s *Service) Translate(ctx context.Context, voice []byte, sourceLang, targe
 		if err != nil {
 			return res, fmt.Errorf("failed to translate text: %w", err)
 		}
+		translateCost := int64(math.Ceil(float64(utf8.RuneCountInString(recognizedSpeech) / 100.0)))
+		if translateCost < 1 {
+			translateCost = 1
+		}
+		res.Cost += translateCost
 		err := s.tc.Store(ctx, recognizedSpeech, translated, recognizedLang, targetLang)
 		if err != nil {
 			log.Warn().
@@ -113,6 +125,11 @@ func (s *Service) Translate(ctx context.Context, voice []byte, sourceLang, targe
 		if err != nil {
 			return res, fmt.Errorf("failed to generate speech: %w", err)
 		}
+		genSpeechCost := int64(math.Ceil(float64(duration) / 15.0))
+		if genSpeechCost < 1 {
+			genSpeechCost = 1
+		}
+		res.Cost += genSpeechCost
 		res.SetCacheFlusher(s.sc, translated, targetLang)
 	}
 	res.Voice = generatedSpeech.Data

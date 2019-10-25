@@ -11,4 +11,5 @@ type Store interface {
 	GetUserByTelegramUserID(ctx context.Context, tgUserID int64) (User, error)
 	StoreUser(ctx context.Context, user *User) error
 	UpdateTranslationLangs(ctx context.Context, tgUserID int64, sourceLang, targetLang string) error
+	ChargeCost(ctx context.Context, tgUserID, cost int64) error
 }

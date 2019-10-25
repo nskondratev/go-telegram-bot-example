@@ -34,6 +34,9 @@ VALUES
 	updateTranslationLangsQuery = `UPDATE "users"
 SET "source_lang" = $1, "target_lang" = $2
 WHERE "telegram_user_id" = $3`
+	updateChargeCostQuery = `UPDATE "users"
+SET "points" = "points" - $1
+WHERE "telegram_user_id" = $2`
 )
 
 type Store struct {
@@ -71,6 +74,14 @@ func (s *Store) UpdateTranslationLangs(ctx context.Context, tgUserID int64, sour
 	_, err := s.db.Exec(ctx, updateTranslationLangsQuery, sourceLang, targetLang, tgUserID)
 	if err != nil {
 		return fmt.Errorf("failed to update user translation languages: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ChargeCost(ctx context.Context, tgUserID, cost int64) error {
+	_, err := s.db.Exec(ctx, updateChargeCostQuery, cost, tgUserID)
+	if err != nil {
+		return fmt.Errorf("failed to charge cost for user: %w", err)
 	}
 	return nil
 }
