@@ -37,14 +37,17 @@ import (
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
 	speechCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/speech/pg"
 	textCachePG "github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate/cache/translator/pg"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var cfgFile string
@@ -97,7 +100,7 @@ to quickly create a Cobra application.`,
 		)
 
 		// Init bot
-		b, err := bot.New(logger, viper.GetString("API_KEY"))
+		b, err := bot.New(logger, viper.GetString("TELEGRAM_API_KEY"))
 		if err != nil {
 			logger.Fatal().
 				Err(err).
@@ -112,6 +115,7 @@ to quickly create a Cobra application.`,
 
 		h := bot.
 			NewChain(
+				middleware.PromUpdate,
 				middleware.LogTimeExecution,
 				middleware.LogUserInfo,
 				middleware.SetUser(usersStore),
@@ -122,8 +126,8 @@ to quickly create a Cobra application.`,
 
 		g, appCtx := errgroup.WithContext(appCtx)
 
+		// Wait for interruption
 		g.Go(func() error {
-			// Wait for interruption
 			ic := make(chan os.Signal, 1)
 			signal.Notify(ic, os.Interrupt, syscall.SIGTERM)
 			<-ic
@@ -132,8 +136,43 @@ to quickly create a Cobra application.`,
 			return appCtx.Err()
 		})
 
+		// Process updates from Telegram
 		g.Go(func() error {
 			return b.RunUpdateChannel(appCtx)
+		})
+
+		// Provide prometheus metrics
+		g.Go(func() error {
+			http.Handle("/metrics", promhttp.Handler())
+
+			srv := &http.Server{
+				Addr:         viper.GetString("ADDR"),
+				ReadTimeout:  5 * time.Second,
+				WriteTimeout: 10 * time.Second,
+				IdleTimeout:  120 * time.Second,
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- srv.ListenAndServe()
+			}()
+
+			select {
+			case err := <-errCh:
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
+					return fmt.Errorf("failed to start HTTP server: %w", err)
+				}
+			case <-appCtx.Done():
+				logger.Info().
+					Msg("Exit from HTTP goroutine")
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := srv.Shutdown(ctx); err != nil {
+					return fmt.Errorf("failed to shutdown HTTP server: %w", err)
+				}
+				return appCtx.Err()
+			}
+			return nil
 		})
 
 		logger.Info().
@@ -176,12 +215,12 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().String("api-key", "", "Telegram bot API key")
+	rootCmd.Flags().String("telegram-api-key", "", "Telegram bot API key")
 
 	if err := viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
 		log.Fatal(err)
 	}
-	if err := viper.BindPFlag("API_KEY", rootCmd.Flags().Lookup("api-key")); err != nil {
+	if err := viper.BindPFlag("TELEGRAM_API_KEY", rootCmd.Flags().Lookup("telegram-api-key")); err != nil {
 		log.Fatal(err)
 	}
 

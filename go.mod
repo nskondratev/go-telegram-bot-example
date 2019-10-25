@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v4 v4.1.2
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.8.1
+	github.com/prometheus/client_golang v0.9.3
 	github.com/rs/zerolog v1.15.0
 	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
 	github.com/spf13/cobra v0.0.5
