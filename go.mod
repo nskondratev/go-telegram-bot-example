@@ -7,11 +7,10 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/golang-migrate/migrate/v4 v4.6.2
 	github.com/google/uuid v1.1.1
-	github.com/jackc/pgx v3.5.0+incompatible
-	github.com/lib/pq v1.2.0 // indirect
+	github.com/jackc/pgx/v4 v4.1.2
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.8.1
-	github.com/rs/zerolog v1.14.3
+	github.com/rs/zerolog v1.15.0
 	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.4.0

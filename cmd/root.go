@@ -27,7 +27,7 @@ import (
 	speech "cloud.google.com/go/speech/apiv1p1beta1"
 	texttospeech "cloud.google.com/go/texttospeech/apiv1"
 	"cloud.google.com/go/translate"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/go-homedir"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -65,7 +65,7 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		appCtx, appCancel := context.WithCancel(context.Background())
 		logger := getLogger()
-		db := getDB()
+		db := getDB(appCtx)
 		usersStore := usersPgStore.New(db)
 
 		// Init translation services
@@ -215,8 +215,8 @@ func getLogger() zerolog.Logger {
 	return l
 }
 
-func getDB() *pgx.ConnPool {
-	db, err := pg.New(viper.GetString("DB_CONN"), 10)
+func getDB(ctx context.Context) *pgxpool.Pool {
+	db, err := pg.New(ctx, viper.GetString("DB_CONN"), 10)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %s", err.Error())
 	}

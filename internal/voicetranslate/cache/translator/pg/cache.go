@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 
 	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
@@ -26,10 +27,10 @@ VALUES
 )
 
 type Cache struct {
-	db *pgx.ConnPool
+	db *pgxpool.Pool
 }
 
-func New(db *pgx.ConnPool) *Cache {
+func New(db *pgxpool.Pool) *Cache {
 	return &Cache{db: db}
 }
 
@@ -38,7 +39,7 @@ func (c *Cache) Get(ctx context.Context, text, sourceLang, targetLang string) (s
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRowEx(ctx, selectQuery, &pgx.QueryExOptions{}, textHash, targetLang)
+	row := c.db.QueryRow(ctx, selectQuery, textHash, targetLang)
 	var translated string
 	err = row.Scan(&translated)
 	if err != nil {
@@ -55,7 +56,7 @@ func (c *Cache) Store(ctx context.Context, text, translation, sourceLang, target
 	if err != nil {
 		return err
 	}
-	_, err = c.db.ExecEx(ctx, insertQuery, &pgx.QueryExOptions{}, textHash, targetLang, text, translation)
+	_, err = c.db.Exec(ctx, insertQuery, textHash, targetLang, text, translation)
 	if err != nil {
 		return fmt.Errorf("failed to store text translation cache: %w", err)
 	}

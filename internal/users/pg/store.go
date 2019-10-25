@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx"
+
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
+
 	"github.com/nskondratev/go-telegram-translator-bot/internal/users"
 )
 
@@ -34,16 +37,16 @@ WHERE "telegram_user_id" = $3`
 )
 
 type Store struct {
-	db *pgx.ConnPool
+	db *pgxpool.Pool
 }
 
-func New(db *pgx.ConnPool) *Store {
+func New(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
 func (s *Store) GetUserByTelegramUserID(ctx context.Context, tgUserID int64) (users.User, error) {
 	var user users.User
-	row := s.db.QueryRowEx(ctx, selectUserByTelegramIDQuery, &pgx.QueryExOptions{}, tgUserID)
+	row := s.db.QueryRow(ctx, selectUserByTelegramIDQuery, tgUserID)
 	err := row.Scan(&user.TelegramUserID, &user.UserName, &user.FirstName, &user.LastName, &user.Lang, &user.SourceLang,
 		&user.TargetLang, &user.Points)
 	if err != nil {
@@ -56,9 +59,8 @@ func (s *Store) GetUserByTelegramUserID(ctx context.Context, tgUserID int64) (us
 }
 
 func (s *Store) StoreUser(ctx context.Context, user *users.User) error {
-	_, err := s.db.ExecEx(ctx, insertUserQuery, &pgx.QueryExOptions{},
-		user.TelegramUserID, user.UserName, user.FirstName, user.LastName, user.Lang, user.SourceLang, user.TargetLang,
-		user.Points)
+	_, err := s.db.Exec(ctx, insertUserQuery, user.TelegramUserID, user.UserName, user.FirstName, user.LastName,
+		user.Lang, user.SourceLang, user.TargetLang, user.Points)
 	if err != nil {
 		return fmt.Errorf("failed to insert user: %w", err)
 	}
@@ -66,7 +68,7 @@ func (s *Store) StoreUser(ctx context.Context, user *users.User) error {
 }
 
 func (s *Store) UpdateTranslationLangs(ctx context.Context, tgUserID int64, sourceLang, targetLang string) error {
-	_, err := s.db.ExecEx(ctx, updateTranslationLangsQuery, &pgx.QueryExOptions{}, sourceLang, targetLang, tgUserID)
+	_, err := s.db.Exec(ctx, updateTranslationLangsQuery, sourceLang, targetLang, tgUserID)
 	if err != nil {
 		return fmt.Errorf("failed to update user translation languages: %w", err)
 	}
