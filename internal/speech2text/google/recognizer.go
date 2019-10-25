@@ -9,6 +9,8 @@ import (
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1p1beta1"
 )
 
+var sampleRateHertzs = []int32{16000, 48000}
+
 type Recognizer struct {
 	client *speech.Client
 }
@@ -17,28 +19,31 @@ func New(client *speech.Client) *Recognizer {
 	return &Recognizer{client: client}
 }
 
-func (r *Recognizer) ToText(ctx context.Context, data []byte, lang []string) (string, string, error) {
-	resp, err := r.client.Recognize(ctx, &speechpb.RecognizeRequest{
-		Config: &speechpb.RecognitionConfig{
-			AudioChannelCount:          1,
-			EnableAutomaticPunctuation: true,
-			Encoding:                   speechpb.RecognitionConfig_OGG_OPUS,
-			LanguageCode:               lang[0],
-			SampleRateHertz:            16000,
-			AlternativeLanguageCodes:   lang[1:],
-		},
-		Audio: &speechpb.RecognitionAudio{
-			AudioSource: &speechpb.RecognitionAudio_Content{Content: data},
-		},
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("failed to recognize speech: %w", err)
+func (r *Recognizer) ToText(ctx context.Context, data []byte, lang []string) (text string, recognizedLang string, err error) {
+	for _, sampleRateHertz := range sampleRateHertzs {
+		resp, err := r.client.Recognize(ctx, &speechpb.RecognizeRequest{
+			Config: &speechpb.RecognitionConfig{
+				AudioChannelCount:          1,
+				EnableAutomaticPunctuation: true,
+				Encoding:                   speechpb.RecognitionConfig_OGG_OPUS,
+				LanguageCode:               lang[0],
+				SampleRateHertz:            sampleRateHertz,
+				AlternativeLanguageCodes:   lang[1:],
+			},
+			Audio: &speechpb.RecognitionAudio{
+				AudioSource: &speechpb.RecognitionAudio_Content{Content: data},
+			},
+		})
+		if err != nil {
+			return "", "", fmt.Errorf("failed to recognize speech: %w", err)
+		}
+		if len(resp.Results) < 1 {
+			continue
+		}
+		text, recognizedLang = getBestResult(resp.Results)
+		return text, recognizedLang, nil
 	}
-	if len(resp.Results) < 1 {
-		return "", "", errors.New("google cloud speech API rerturned an empty response")
-	}
-	text, recognized := getBestResult(resp.Results)
-	return text, recognized, nil
+	return "", "", errors.New("google cloud speech API rerturned an empty response")
 }
 
 // Get best result by confidence

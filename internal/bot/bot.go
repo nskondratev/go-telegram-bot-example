@@ -25,14 +25,9 @@ func New(logger zerolog.Logger, apiToken string) (Bot, error) {
 	}
 
 	tg, err := tgbotapi.NewBotAPI(apiToken)
-
 	if err != nil {
 		return b, errors.Wrap(err, "failed to create telegram bot instance")
 	}
-
-	//if zerolog.GlobalLevel() == zerolog.DebugLevel {
-	//	tg.Debug = true
-	//}
 
 	b.tg = tg
 
