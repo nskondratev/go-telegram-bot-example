@@ -10,21 +10,21 @@ import (
 var defaultObj = map[float64]float64{0.5: 0.05, 0.75: 0.05, 0.95: 0.05, 0.99: 0.05}
 
 // Represents observable action instance
-type Action struct {
+type LatencyAction struct {
 	ts     time.Time
 	labels []string
 	vec    *prometheus.SummaryVec
 }
 
-func (a Action) Observe(status Status) {
+func (a LatencyAction) Observe(status Status) {
 	a.vec.
 		WithLabelValues(append([]string{status.String()}, a.labels...)...).
 		Observe(float64(time.Now().Sub(a.ts).Nanoseconds()))
 }
 
-// Represents latency metric
+// Represents vec metric
 type Latency struct {
-	latency          *prometheus.SummaryVec
+	vec              *prometheus.SummaryVec
 	additionalLabels []string
 }
 
@@ -35,7 +35,7 @@ func NewLatency(name, help string, obj map[float64]float64, additionalLabels []s
 	}
 	labels := append([]string{"status"}, additionalLabels...)
 	m := Latency{
-		latency: prometheus.NewSummaryVec(
+		vec: prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Name:       name,
 				Help:       help,
@@ -45,17 +45,19 @@ func NewLatency(name, help string, obj map[float64]float64, additionalLabels []s
 		),
 		additionalLabels: additionalLabels,
 	}
-	prometheus.MustRegister(m.latency)
+	prometheus.MustRegister(m.vec)
 	return &m
 }
 
-func (l Latency) NewAction(labels ...string) *Action {
-	if len(labels) != len(l.additionalLabels) {
-		panic(fmt.Errorf("action and metric labels count mismatch: %d != %d", len(labels), len(l.additionalLabels)))
+// Returns new Action for Latency metric collector
+// Panics if the labels count is invalid
+func (m Latency) NewAction(labels ...string) *LatencyAction {
+	if len(labels) != len(m.additionalLabels) {
+		panic(fmt.Errorf("action and metric labels count mismatch: %d != %d", len(labels), len(m.additionalLabels)))
 	}
-	return &Action{
+	return &LatencyAction{
 		ts:     time.Now(),
 		labels: labels,
-		vec:    l.latency,
+		vec:    m.vec,
 	}
 }
