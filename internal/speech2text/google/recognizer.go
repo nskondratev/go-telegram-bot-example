@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/metrics"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1p1beta1"
 )
@@ -12,15 +13,25 @@ import (
 var sampleRateHertzs = []int32{16000, 48000}
 
 type Recognizer struct {
-	client *speech.Client
+	client        *speech.Client
+	latencyMetric *metrics.Latency
 }
 
 func New(client *speech.Client) *Recognizer {
-	return &Recognizer{client: client}
+	return &Recognizer{
+		client: client,
+		latencyMetric: metrics.NewLatency(
+			"bot_gcloud_speech2text_latency",
+			"Latency for speech2text requests to GCloud",
+			nil,
+			[]string{"sample_rate_hertz"},
+		),
+	}
 }
 
 func (r *Recognizer) ToText(ctx context.Context, data []byte, lang []string) (text string, recognizedLang string, err error) {
 	for _, sampleRateHertz := range sampleRateHertzs {
+		m := r.latencyMetric.NewAction(getLabelBySampleRateHertz(sampleRateHertz))
 		resp, err := r.client.Recognize(ctx, &speechpb.RecognizeRequest{
 			Config: &speechpb.RecognitionConfig{
 				AudioChannelCount:          1,
@@ -35,11 +46,14 @@ func (r *Recognizer) ToText(ctx context.Context, data []byte, lang []string) (te
 			},
 		})
 		if err != nil {
+			m.Observe(metrics.StatusErr)
 			return "", "", fmt.Errorf("failed to recognize speech: %w", err)
 		}
 		if len(resp.Results) < 1 {
+			m.Observe(metrics.StatusErr)
 			continue
 		}
+		m.Observe(metrics.StatusOk)
 		text, recognizedLang = getBestResult(resp.Results)
 		return text, recognizedLang, nil
 	}
@@ -60,4 +74,15 @@ func getBestResult(results []*speechpb.SpeechRecognitionResult) (text string, la
 		}
 	}
 	return text, util.Normalize(lang)
+}
+
+func getLabelBySampleRateHertz(in int32) string {
+	switch in {
+	case 16000:
+		return "16000"
+	case 48000:
+		return "48000"
+	default:
+		return ""
+	}
 }
