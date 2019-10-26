@@ -49,7 +49,8 @@ func (h *Handler) Middleware(next bot.Handler) bot.Handler {
 }
 
 func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
-	switch update.Message.Command() {
+	cmd := update.Message.Command()
+	switch cmd {
 	case "start":
 		h.onStart(ctx, update)
 	case "help":
@@ -58,6 +59,8 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		h.onLang(ctx, update)
 	case "toggle":
 		h.onToggle(ctx, update)
+	default:
+		h.onUnknown(ctx, update)
 	}
 }
 
@@ -176,7 +179,20 @@ func (h *Handler) onLang(ctx context.Context, update tgbotapi.Update) {
 			l.Observe(metrics.StatusErr)
 			return
 		}
-		l.Observe(metrics.StatusOk)
+	}
+	l.Observe(metrics.StatusOk)
+}
+
+func (h *Handler) onUnknown(ctx context.Context, update tgbotapi.Update) {
+	log := zerolog.Ctx(ctx)
+	l := h.commandsLatency.NewAction(update.Message.Command())
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Unknown command.")
+	if _, err := h.bot.Send(msg); err != nil {
+		log.Error().
+			Err(err).
+			Msg("error while trying to send reply message")
+		l.Observe(metrics.StatusErr)
 		return
 	}
+	l.Observe(metrics.StatusOk)
 }
