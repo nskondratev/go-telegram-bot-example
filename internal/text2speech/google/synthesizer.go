@@ -8,15 +8,25 @@ import (
 	"golang.org/x/text/language"
 	texttospeechpb "google.golang.org/genproto/googleapis/cloud/texttospeech/v1"
 
+	"github.com/nskondratev/go-telegram-translator-bot/internal/metrics"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/voicetranslate"
 )
 
 type Synthesizer struct {
-	client *texttospeech.Client
+	client        *texttospeech.Client
+	latencyMetric *metrics.Latency
 }
 
 func New(client *texttospeech.Client) *Synthesizer {
-	return &Synthesizer{client: client}
+	return &Synthesizer{
+		client: client,
+		latencyMetric: metrics.NewLatency(
+			"bot_gcloud_text2speech_latency",
+			"Latency for speech synthesis requests to GCloud",
+			nil,
+			nil,
+		),
+	}
 }
 
 func (s *Synthesizer) ToSpeech(ctx context.Context, text string, lang string) (voicetranslate.TextToSpeechResult, error) {
@@ -38,10 +48,13 @@ func (s *Synthesizer) ToSpeech(ctx context.Context, text string, lang string) (v
 			SampleRateHertz: 48000,
 		},
 	}
+	m := s.latencyMetric.NewAction()
 	resp, err := s.client.SynthesizeSpeech(ctx, &req)
 	if err != nil {
+		m.Observe(metrics.StatusErr)
 		return res, fmt.Errorf("failed to synthesize speech: %w", err)
 	}
+	m.Observe(metrics.StatusOk)
 	res.Data = resp.AudioContent
 	return res, nil
 }
