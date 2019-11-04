@@ -2,7 +2,7 @@ ensure-deps:
 	go mod tidy && go mod vendor
 
 run:
-	go run main.go --config "./conf.yml"
+	GOOGLE_APPLICATION_CREDENTIALS=./gcloud_cred.json go run main.go --config "./conf.yml"
 
 init-db:
 	go run main.go db init --config "./conf.yml"

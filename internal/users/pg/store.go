@@ -34,6 +34,12 @@ VALUES
 	updateTranslationLangsQuery = `UPDATE "users"
 SET "source_lang" = $1, "target_lang" = $2
 WHERE "telegram_user_id" = $3`
+	updateSourceLangQuery = `UPDATE "users"
+SET "source_lang" = $1
+WHERE "telegram_user_id" = $2`
+	updateTargetLangQuery = `UPDATE "users"
+SET "target_lang" = $1
+WHERE "telegram_user_id" = $2`
 	updateChargeCostQuery = `UPDATE "users"
 SET "points" = "points" - $1
 WHERE "telegram_user_id" = $2`
@@ -74,6 +80,22 @@ func (s *Store) UpdateTranslationLangs(ctx context.Context, tgUserID int64, sour
 	_, err := s.db.Exec(ctx, updateTranslationLangsQuery, sourceLang, targetLang, tgUserID)
 	if err != nil {
 		return fmt.Errorf("failed to update user translation languages: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateSourceLang(ctx context.Context, tgUserID int64, sourceLang string) error {
+	_, err := s.db.Exec(ctx, updateSourceLangQuery, sourceLang, tgUserID)
+	if err != nil {
+		return fmt.Errorf("failed to update user source lang: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateTargetLang(ctx context.Context, tgUserID int64, targetLang string) error {
+	_, err := s.db.Exec(ctx, updateTargetLangQuery, targetLang, tgUserID)
+	if err != nil {
+		return fmt.Errorf("failed to update user target lang: %w", err)
 	}
 	return nil
 }

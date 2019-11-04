@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/go-homedir"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/callbackquery"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/command"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/handler/voice"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/app/middleware"
@@ -110,6 +111,7 @@ to quickly create a Cobra application.`,
 		msgHandler := bot.
 			NewChain(
 				command.New(&b, usersStore).Middleware,
+				callbackquery.New(&b, usersStore).Middleware,
 			).
 			Then(voice.New(&b, vs, usersStore))
 

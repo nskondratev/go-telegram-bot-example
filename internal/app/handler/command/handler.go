@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/lang"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -56,7 +57,7 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 	case "help":
 		h.onHelp(ctx, update)
 	case "lang":
-		h.onLang(ctx, update)
+		h.onLangKbd(ctx, update)
 	case "toggle":
 		h.onToggle(ctx, update)
 	default:
@@ -117,6 +118,21 @@ func (h *Handler) onToggle(ctx context.Context, update tgbotapi.Update) {
 		}
 		l.Observe(metrics.StatusOk)
 	}
+}
+
+func (h *Handler) onLangKbd(ctx context.Context, update tgbotapi.Update) {
+	log := zerolog.Ctx(ctx)
+	l := h.commandsLatency.NewAction("lang")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Choose first language for translation:")
+	msg.ReplyMarkup = lang.SourceLanguagesKeyboard
+	if _, err := h.bot.Send(msg); err != nil {
+		log.Error().
+			Err(err).
+			Msg("error while trying to send reply message")
+		l.Observe(metrics.StatusErr)
+		return
+	}
+	l.Observe(metrics.StatusOk)
 }
 
 func (h *Handler) onLang(ctx context.Context, update tgbotapi.Update) {

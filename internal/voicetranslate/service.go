@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
 	"math"
 	"unicode/utf8"
 
 	"github.com/rs/zerolog"
+
+	"github.com/nskondratev/go-telegram-translator-bot/internal/lang"
 )
 
 // Service that transforms speech to text
@@ -90,7 +91,7 @@ func (s *Service) Translate(ctx context.Context, voice []byte, duration int, sou
 	if res.Cost < 1 {
 		res.Cost = 1
 	}
-	targetLang = util.GetTargetLang(recognizedLang, sourceLang, targetLang)
+	targetLang = lang.GetTargetLang(recognizedLang, sourceLang, targetLang)
 	translated, err := s.tc.Get(ctx, recognizedSpeech, recognizedLang, targetLang)
 	if err != nil {
 		if !errors.Is(err, ErrNotFoundInCache) {

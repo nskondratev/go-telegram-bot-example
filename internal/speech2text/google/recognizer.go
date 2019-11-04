@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nskondratev/go-telegram-translator-bot/internal/lang"
 	"github.com/nskondratev/go-telegram-translator-bot/internal/metrics"
-	"github.com/nskondratev/go-telegram-translator-bot/internal/util"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1p1beta1"
 )
 
@@ -62,18 +62,18 @@ func (r *Recognizer) ToText(ctx context.Context, data []byte, lang []string) (te
 
 // Get best result by confidence
 // Returns text and language code
-func getBestResult(results []*speechpb.SpeechRecognitionResult) (text string, lang string) {
+func getBestResult(results []*speechpb.SpeechRecognitionResult) (text string, sourceLang string) {
 	var conf float32
 	for _, res := range results {
 		for _, a := range res.Alternatives {
 			if a.Confidence > conf {
 				conf = a.Confidence
 				text = a.Transcript
-				lang = res.LanguageCode
+				sourceLang = res.LanguageCode
 			}
 		}
 	}
-	return text, util.Normalize(lang)
+	return text, lang.Normalize(sourceLang)
 }
 
 func getLabelBySampleRateHertz(in int32) string {
