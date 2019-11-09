@@ -12,16 +12,21 @@ import (
 )
 
 type Handler struct {
-	bot                    *bot.Bot
-	us                     users.Store
-	warnErrorsMetric       *metrics.Counter
-	sendReplyLatencyMetric *metrics.Latency
+	bot            *bot.Bot
+	us             users.Store
+	queriesLatency *metrics.Latency
 }
 
 func New(bot *bot.Bot, us users.Store) *Handler {
 	return &Handler{
 		bot: bot,
 		us:  us,
+		queriesLatency: metrics.NewLatency(
+			"bot_callbackquery_handler_latency",
+			"Latency for handling time by callback query and status",
+			nil,
+			[]string{"type"},
+		),
 	}
 }
 
@@ -55,73 +60,85 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 func (h *Handler) onSourceLang(ctx context.Context, update tgbotapi.Update) {
 	log := zerolog.Ctx(ctx)
 	user := users.Ctx(ctx)
-	if user != nil {
-		sourceLang := getLangValue(update.CallbackQuery.Data)
-		log.Info().
+	l := h.queriesLatency.NewAction("source_lang")
+	if user == nil {
+		log.Warn().Msg("User is nil :(")
+		l.Observe(metrics.StatusErr)
+		return
+	}
+	sourceLang := getLangValue(update.CallbackQuery.Data)
+	log.Info().
+		Str("username", user.UserName).
+		Str("data", update.CallbackQuery.Data).
+		Str("lang", sourceLang).
+		Msg("on source lang callback query handler")
+	if err := h.us.UpdateSourceLang(ctx, user.TelegramUserID, sourceLang); err != nil {
+		log.Error().
+			Err(err).
 			Str("username", user.UserName).
+			Int64("telegram_user_id", user.TelegramUserID).
 			Str("data", update.CallbackQuery.Data).
 			Str("lang", sourceLang).
-			Msg("on source lang callback query handler")
-		if err := h.us.UpdateSourceLang(ctx, user.TelegramUserID, sourceLang); err != nil {
-			log.Error().
-				Err(err).
-				Str("username", user.UserName).
-				Int64("telegram_user_id", user.TelegramUserID).
-				Str("data", update.CallbackQuery.Data).
-				Str("lang", sourceLang).
-				Msg("Failed to update source language for user")
-			return
-		}
-		msg := tgbotapi.NewEditMessageText(
-			update.CallbackQuery.Message.Chat.ID,
-			update.CallbackQuery.Message.MessageID,
-			"Great! Now choose the second language for translation:",
-		)
-		msg.ReplyMarkup = &lang.TargetLanguagesKeyboard
-		if _, err := h.bot.Send(msg); err != nil {
-			log.Error().
-				Err(err).
-				Msg("error while trying to send reply message")
-		}
-	} else {
-		log.Warn().Msg("User is nil :(")
+			Msg("Failed to update source language for user")
+		l.Observe(metrics.StatusErr)
+		return
 	}
+	msg := tgbotapi.NewEditMessageText(
+		update.CallbackQuery.Message.Chat.ID,
+		update.CallbackQuery.Message.MessageID,
+		"Great! Now choose the second language for translation:",
+	)
+	msg.ReplyMarkup = &lang.TargetLanguagesKeyboard
+	if _, err := h.bot.Send(msg); err != nil {
+		log.Error().
+			Err(err).
+			Msg("error while trying to send reply message")
+		l.Observe(metrics.StatusErr)
+		return
+	}
+	l.Observe(metrics.StatusOk)
 }
 
 func (h *Handler) onTargetLang(ctx context.Context, update tgbotapi.Update) {
 	log := zerolog.Ctx(ctx)
 	user := users.Ctx(ctx)
-	if user != nil {
-		targetLang := getLangValue(update.CallbackQuery.Data)
-		log.Info().
+	l := h.queriesLatency.NewAction("target_lang")
+	if user == nil {
+		log.Warn().Msg("User is nil :(")
+		l.Observe(metrics.StatusErr)
+		return
+	}
+	targetLang := getLangValue(update.CallbackQuery.Data)
+	log.Info().
+		Str("username", user.UserName).
+		Str("data", update.CallbackQuery.Data).
+		Str("lang", targetLang).
+		Msg("on target lang callback query handler")
+	if err := h.us.UpdateTargetLang(ctx, user.TelegramUserID, targetLang); err != nil {
+		log.Error().
+			Err(err).
 			Str("username", user.UserName).
+			Int64("telegram_user_id", user.TelegramUserID).
 			Str("data", update.CallbackQuery.Data).
 			Str("lang", targetLang).
-			Msg("on target lang callback query handler")
-		if err := h.us.UpdateTargetLang(ctx, user.TelegramUserID, targetLang); err != nil {
-			log.Error().
-				Err(err).
-				Str("username", user.UserName).
-				Int64("telegram_user_id", user.TelegramUserID).
-				Str("data", update.CallbackQuery.Data).
-				Str("lang", targetLang).
-				Msg("Failed to update target language for user")
-			return
-		}
-		msg := tgbotapi.NewEditMessageText(
-			update.CallbackQuery.Message.Chat.ID,
-			update.CallbackQuery.Message.MessageID,
-			"Great, you've changed your translation languages.",
-		)
-		msg.ReplyMarkup = nil
-		if _, err := h.bot.Send(msg); err != nil {
-			log.Error().
-				Err(err).
-				Msg("error while trying to send reply message")
-		}
-	} else {
-		log.Warn().Msg("User is nil :(")
+			Msg("Failed to update target language for user")
+		l.Observe(metrics.StatusErr)
+		return
 	}
+	msg := tgbotapi.NewEditMessageText(
+		update.CallbackQuery.Message.Chat.ID,
+		update.CallbackQuery.Message.MessageID,
+		"Great, you've changed your translation languages.",
+	)
+	msg.ReplyMarkup = nil
+	if _, err := h.bot.Send(msg); err != nil {
+		log.Error().
+			Err(err).
+			Msg("error while trying to send reply message")
+		l.Observe(metrics.StatusErr)
+		return
+	}
+	l.Observe(metrics.StatusOk)
 }
 
 func getLangValue(data string) string {
