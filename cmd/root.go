@@ -140,7 +140,7 @@ to quickly create a Cobra application.`,
 
 		// Process updates from Telegram
 		g.Go(func() error {
-			return b.RunUpdateChannel(appCtx)
+			return b.PollUpdates(appCtx)
 		})
 
 		// Provide prometheus metrics
@@ -183,9 +183,7 @@ to quickly create a Cobra application.`,
 		err = g.Wait()
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
-				logger.Info().
-					Err(err).
-					Msg("App context is canceled")
+				logger.Info().Msg("App context is canceled")
 			} else {
 				logger.Fatal().
 					Err(err).

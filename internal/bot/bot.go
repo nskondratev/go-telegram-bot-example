@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
 
 type Bot struct {
@@ -38,7 +39,7 @@ func (b *Bot) Handle(h Handler) {
 	b.handler = h
 }
 
-func (b Bot) RunUpdateChannel(ctx context.Context) error {
+func (b Bot) PollUpdates(ctx context.Context) error {
 	if b.handler == nil {
 		return errors.New("handler must be set before running updater")
 	}
@@ -52,28 +53,51 @@ func (b Bot) RunUpdateChannel(ctx context.Context) error {
 		return errors.Wrap(err, "failed to get updates channel")
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			b.logger.Info().
-				Str("cause", "context is closed").
-				Msg("exit loop for getting updates")
-			return ctx.Err()
-		case update, ok := <-updates:
-			if !ok {
-				b.logger.Info().
-					Str("cause", "updates channel is closed").
-					Msg("exit loop for getting updates")
-				return nil
+	g, ctx := errgroup.WithContext(ctx)
+	jobs := make(chan tgbotapi.Update, 1000)
+	// Start workers
+	for i := 0; i < 10; i++ {
+		i := i
+		g.Go(func() error {
+			log := b.logger.With().
+				Int("worker_num", i).
+				Logger()
+			log.Info().Msg("Start update worker")
+			for update := range jobs {
+				handlerLogger := log.With().
+					Str("request_id", uuid.New().String()).
+					Logger()
+				handlerCtx := handlerLogger.WithContext(ctx)
+				b.handler.Handle(handlerCtx, update)
 			}
-
-			handlerLogger := b.logger.With().Str("requestId", uuid.New().String()).Logger()
-
-			handlerCtx := handlerLogger.WithContext(ctx)
-
-			b.handler.Handle(handlerCtx, update)
-		}
+			log.Info().Msg("Exit update worker")
+			return nil
+		})
 	}
+
+	// Handle updates
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				b.logger.Info().
+					Str("cause", "context is closed").
+					Msg("exit loop for getting updates")
+				close(jobs)
+				return ctx.Err()
+			case update, ok := <-updates:
+				if !ok {
+					b.logger.Info().
+						Str("cause", "updates channel is closed").
+						Msg("exit loop for getting updates")
+					return nil
+				}
+				jobs <- update
+			}
+		}
+	})
+
+	return g.Wait()
 }
 
 func (b Bot) Send(c tgbotapi.Chattable) (tgbotapi.Message, error) {
